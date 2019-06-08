@@ -59,9 +59,9 @@ func main() {
 	if len(flavorDimensions) == 0 {
 		fail("failed to parse flavor labels, check input: %v", conf.FlavorLabels)
 	}
-	variantPatternRegex := regexp.MustCompile(`\$\d`)
+	variantPatternRegex := regexp.MustCompile(`#\d`)
 	if !variantPatternRegex.MatchString(conf.VariantPattern) {
-		fail("variant pattern does not include a placeholder $<n>, check input: %v", conf.VariantPattern)
+		fail("variant pattern does not include a placeholder #<n>, check input: %v", conf.VariantPattern)
 	}
 
 	requestBody := `
@@ -136,15 +136,15 @@ func main() {
 
 	for _, flavorDimension := range flavorDimensions {
 		outPatterns := make(map[string]bool)
-		placeholder := fmt.Sprintf("$%d", flavorDimension.Index)
+		placeholder := fmt.Sprintf("#%d", flavorDimension.Index)
 		selectedFlavors := flavorDimension.SelectedFlavors
 		if len(selectedFlavors) == 0 {
 			selectedFlavors = make(map[string]bool)
 			selectedFlavors[flavorDimension.DefaultFlavor] = true
 		}
-		for flavorLabel, _ := range selectedFlavors {
+		for flavorLabel := range selectedFlavors {
 			flavor := flavorDimension.Flavors[flavorLabel]
-			for pattern, _ := range patterns {
+			for pattern := range patterns {
 				var outPattern = pattern
 				if strings.HasPrefix(pattern, placeholder) {
 					outPattern = flavor + strings.TrimPrefix(pattern, placeholder)
@@ -158,7 +158,7 @@ func main() {
 	// finally, patterns contains all combinations of conf.VariantPattern with resolved placeholders
 	variants := make([]string, len(patterns))
 	i := 0
-	for variant, _ := range patterns {
+	for variant := range patterns {
 		variants[i] = variant
 		i++
 	}

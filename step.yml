@@ -130,15 +130,15 @@ inputs:
       title: "variant pattern"
       summary: The pattern used to build the variant names out of the selected flavor combinations
       description: |
-        The variant pattern should include one placeholder "$n" for the selected flavor of the n-th dimension.
+        The variant pattern should include one placeholder "#n" for the selected flavor of the n-th dimension.
 
         Example:
-        $1Release  -> with selected flavors full and demo, this generates the variants "fullRelease" and "demoRelease"
+        #1Release  -> with selected flavors full and demo, this generates the variants "fullRelease" and "demoRelease"
 
-        $1$2Release -> with selected flavors full of dimension 1 and blue / orange of dimension 2, this generates the variants
+        #1#2Release -> with selected flavors full of dimension 1 and blue / orange of dimension 2, this generates the variants
         "fullBlueRelease" and "fullOrangeRelease" (camelCasing the variant names is done automatically)
 
-        $1Release -> with flavor label specification "trial=demo,full" and PR label "trial" set this generates the variant "demoRelease"
+        #1Release -> with flavor label specification "trial=demo,full" and PR label "trial" set this generates the variant "demoRelease"
 
         The dimension index is one-based and determined by the order of the dimension in the flavor_labels specification.
 
