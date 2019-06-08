@@ -1,0 +1,155 @@
+#
+# A couple of useful guides & docs:
+#
+# - Main Bitrise CLI docs: https://github.com/bitrise-io/bitrise/tree/master/_docs
+# - Step Development Guideline: https://github.com/bitrise-io/bitrise/blob/master/_docs/step-development-guideline.md
+# - Bitrise.yml format spec: https://github.com/bitrise-io/bitrise/blob/master/_docs/bitrise-yml-format-spec.md
+# - Bitrise docs: http://devcenter.bitrise.io/
+# - Bitrise CLI guides: http://devcenter.bitrise.io/bitrise-cli/
+
+title: |-
+  bitrise-step-variant-labels
+summary: |
+  Extracts labels from PR and derives build variants to build from it
+description: |
+  When merging a PR, this step evaluates the labels on the github PR and generates a list of Android gradle build variants based on the labels set. Multiple flavor dimensions can be set. The labels to recognize are configured in the step.
+website: https://github.com/tvietinghoff/bitrise-step-variant-labels
+source_code_url: https://github.com/tvietinghoff/bitrise-step-variant-labels
+support_url: https://github.com/tvietinghoff/bitrise-step-variant-labels/issues
+host_os_tags:
+  - osx-10.10
+  - ubuntu-16.04
+
+# If this step should be available only for certain project types
+# just uncomment this `project_type_tags` section and include all the
+# project types supported by the step. If the step can be used for all
+# project types then you can just remove this section.
+# If no `project_type_tags` specified (or specified as an empty array)
+# that means the step can be used for any project type.
+# You can find more information about project type tags in the Step Development Guideline:
+# https://github.com/bitrise-io/bitrise/blob/master/_docs/step-development-guideline.md
+#
+project_type_tags:
+#   - ios
+#   - macos
+   - android
+#   - xamarin
+#   - react-native
+#   - cordova
+#   - ionic
+
+# Type tags are used for categorizing steps, for easier step discovery in Step Libraries.
+# You can find more information about type tags in the Step Development Guideline:
+# https://github.com/bitrise-io/bitrise/blob/master/_docs/step-development-guideline.md
+type_tags:
+  - utility
+
+is_requires_admin_user: true
+is_always_run: false
+is_skippable: false
+run_if: ""
+
+deps:
+  brew:
+  - name: git
+  - name: wget
+  apt_get:
+  - name: git
+  - name: wget
+
+
+toolkit:
+  go:
+    package_name: github.com/tvietinghoff/bitrise-step-variant-labels
+
+
+inputs:
+  - repo_owner: $GITHUB_REPO_OWNER
+    opts:
+      title: "github repo owner"
+      summary: Owner of the github repo.
+      description: |
+        Owner of the github repo.
+
+      is_expand: true
+      is_required: true
+  - repo_name: $GITHUB_REPO_NAME
+    opts:
+      title: "github repo name"
+      summary: Name of the github repo.
+      description: |
+        Name of the github repo.
+
+      is_expand: true
+      is_required: true
+  - auth_token: $GITHUB_TOKEN
+    opts:
+      title: "github auth token"
+      summary: Github authentication token with access to the repo.
+      description: |
+        A github authentication token with sufficient rights to the github repo to extract pull request information.
+
+      is_expand: true
+      is_required: true
+      is_sensitive: true
+  - pull_request: $PULL_REQUEST_ID
+    opts:
+      title: "pull request id"
+      summary: Number of the pull request to inspect for labels.
+      description: |
+        The PR must have the labels configured or defaults must be set in the step configuration or the build will fail.
+
+      is_expand: true
+      is_required: true
+  - flavor_labels:
+    opts:
+      title: "flavor labels"
+      summary: The labels to use for generating the variant names
+      description: |
+        Flavor labels is a comma-separated list of label names that will designate flavors to build. Multiple flavor
+        dimensions can be specified by separating a flavor list with "|". Prefixing a label name with "!" will select
+        it as the flavor of the respective dimension if no labels for that dimension are set at the PR. There can be
+        only one default flavor per dimension.
+        A label can optionally be associated with the flavor name to use instead of the label name by appending "={flavorName}"
+        to the label name: "trial=demo". In this case, when the label "trial" is set on the PR, the "demo" flavor will be selected.
+
+        Example
+        full,demo   -> looks for the labels full and demo and selects either one as a build flavor. If none is set, the step fails
+
+        full,!demo -> looks for the labels full and demo and selects either one as a build flavor. If none is set, demo will be selected
+
+        full,!demo|orange,blue,!teal -> two dimensions. With a label set of "blue" and "orange" this will select the flavor
+        combinations "demo+blue", "demo+orange"
+
+        NB: although this is targeted for selecting flavors, it can just as well be applied to build types.
+
+      is_expand: true
+      is_required: true
+  - variant_pattern:
+    opts:
+      title: "variant pattern"
+      summary: The pattern used to build the variant names out of the selected flavor combinations
+      description: |
+        The variant pattern should include one placeholder "$n" for the selected flavor of the n-th dimension.
+
+        Example:
+        $1Release  -> with selected flavors full and demo, this generates the variants "fullRelease" and "demoRelease"
+
+        $1$2Release -> with selected flavors full of dimension 1 and blue / orange of dimension 2, this generates the variants
+        "fullBlueRelease" and "fullOrangeRelease" (camelCasing the variant names is done automatically)
+
+        $1Release -> with flavor label specification "trial=demo,full" and PR label "trial" set this generates the variant "demoRelease"
+
+        The dimension index is one-based and determined by the order of the dimension in the flavor_labels specification.
+
+      is_expand: true
+      is_required: true
+
+outputs:
+  - VARIANTS:
+    opts:
+      title: "Build variants"
+      summary: Space-separated list of generated build variant.
+      description: |
+        The list of the build variants generated by applying the variant pattern to the combination of flavors found as labels
+        in the PR. This can be used as input for the gradle runner step in Bitrise.
