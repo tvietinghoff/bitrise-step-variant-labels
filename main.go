@@ -125,22 +125,25 @@ func main() {
 	}
 
 	for _, label := range graphQLResponse.Data.Repository.PullRequest.Labels.Edges {
-		dimension := flavors[label.Node.Name]
+		labelName := label.Node.Name
+		dimension := flavors[labelName]
 		if dimension != 0 {
-			flavorDimensions[dimension].SelectedFlavors[label.Node.Name] = true
+			flavorDimensions[dimension].SelectedFlavors[labelName] = true
+			fmt.Printf("Found label for flavor %s\n", labelName)
 		}
 	}
 
 	patterns := make(map[string]bool)
 	patterns[strings.Trim(conf.VariantPattern, " ")] = true
 
-	for _, flavorDimension := range flavorDimensions {
+	for index, flavorDimension := range flavorDimensions {
 		outPatterns := make(map[string]bool)
 		placeholder := fmt.Sprintf("#%d", flavorDimension.Index)
 		selectedFlavors := flavorDimension.SelectedFlavors
 		if len(selectedFlavors) == 0 {
 			selectedFlavors = make(map[string]bool)
 			selectedFlavors[flavorDimension.DefaultFlavor] = true
+			fmt.Printf("No label for flavor dimension %d found, defaulting to %s\n", index, flavorDimension.DefaultFlavor)
 		}
 		for flavorLabel := range selectedFlavors {
 			flavor := flavorDimension.Flavors[flavorLabel]
@@ -163,7 +166,7 @@ func main() {
 		i++
 	}
 	variantsString := strings.Join(variants, " ")
-	fmt.Printf("variants = %s\n", variants)
+	fmt.Printf("variants = %s\n", variantsString)
 	err = tools.ExportEnvironmentWithEnvman(`VARIANTS`, variantsString)
 	if err != nil {
 		fail("Failed to export environment variable: %v", err)
