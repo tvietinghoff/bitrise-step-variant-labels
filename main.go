@@ -14,12 +14,12 @@ import (
 )
 
 type Conf struct {
-	RepoOwner      string `env:"repo_owner,required"`
-	RepoName       string `env:"repo_name,required"`
-	AuthToken      string `env:"auth_token,required"`
-	PullRequest    int    `env:"pull_request,required"`
-	FlavorLabels   string `env:"flavor_labels,required"`
-	VariantPattern string `env:"variant_pattern,required"`
+	RepoOwner       string `env:"repo_owner,required"`
+	RepoName        string `env:"repo_name,required"`
+	AuthToken       string `env:"auth_token,required"`
+	PullRequest     int    `env:"pull_request,required"`
+	FlavorLabels    string `env:"flavor_labels,required"`
+	VariantPatterns string `env:"variant_patterns,required"`
 }
 
 type GraphQLResponse struct {
@@ -44,7 +44,6 @@ func fail(message string, args ...interface{}) {
 }
 
 func main() {
-
 	var conf Conf
 
 	if err := stepconf.Parse(&conf); err != nil {
@@ -59,9 +58,27 @@ func main() {
 	if len(flavorDimensions) == 0 {
 		fail("failed to parse flavor labels, check input: %v", conf.FlavorLabels)
 	}
+
 	variantPatternRegex := regexp.MustCompile(`#\d`)
-	if !variantPatternRegex.MatchString(conf.VariantPattern) {
-		fail("variant pattern does not include a placeholder #<n>, check input: %v", conf.VariantPattern)
+	variantPatterns := make(map[string]string)
+
+	for _, patternSpec := range strings.Split(conf.VariantPatterns, "|") {
+		parts := strings.Split(patternSpec, "=")
+		if len(parts) != 2 {
+			fail("invalid variant pattern specification: %v\nExpected '{variable}={pattern}[;{separator}]", patternSpec)
+		}
+
+		key := strings.TrimSpace(parts[0])
+		if len(key) == 0 {
+			fail("variant pattern specification does not include a key, check input: %v", patternSpec)
+		}
+		pattern := strings.TrimSpace(parts[1])
+
+		if !variantPatternRegex.MatchString(pattern) {
+			fail("variant pattern does not include a placeholder #<n>, check input: %v", patternSpec)
+		}
+
+		variantPatterns[key] = pattern
 	}
 
 	requestBody := `
@@ -133,9 +150,27 @@ func main() {
 		}
 	}
 
-	patterns := make(map[string]bool)
-	patterns[strings.Trim(conf.VariantPattern, " ")] = true
+	for key, pattern := range variantPatterns {
+		generateEnvironmentVariable(key, pattern, flavorDimensions, err)
+	}
 
+	os.Exit(0)
+}
+
+func generateEnvironmentVariable(key string, pattern string, flavorDimensions map[int]FlavorDimension, err error) {
+	patterns := make(map[string]bool)
+	separator := " "
+	separatorPos := strings.Index(pattern, `;`)
+	if separatorPos > 0 {
+		separator = pattern[separatorPos+1:]
+		if len(separator) == 0 {
+			separator = " "
+		}
+		pattern = pattern[:separatorPos]
+	}
+	pattern = strings.TrimSpace(pattern)
+
+	patterns[pattern] = true
 	for index, flavorDimension := range flavorDimensions {
 		outPatterns := make(map[string]bool)
 		placeholder := fmt.Sprintf("#%d", flavorDimension.Index)
@@ -158,20 +193,19 @@ func main() {
 		}
 		patterns = outPatterns
 	}
-	// finally, patterns contains all combinations of conf.VariantPattern with resolved placeholders
+	// finally, patterns contains all combinations of pattern with resolved placeholders
 	variants := make([]string, len(patterns))
 	i := 0
 	for variant := range patterns {
 		variants[i] = variant
 		i++
 	}
-	variantsString := strings.Join(variants, " ")
-	fmt.Printf("variants = %s\n", variantsString)
-	err = tools.ExportEnvironmentWithEnvman(`VARIANTS`, variantsString)
+	variantsString := strings.Join(variants, separator)
+	fmt.Printf("%s = %s\n", key, variantsString)
+	err = tools.ExportEnvironmentWithEnvman(key, variantsString)
 	if err != nil {
 		fail("Failed to export environment variable: %v", err)
 	}
-	os.Exit(0)
 }
 
 type FlavorDimension struct {
