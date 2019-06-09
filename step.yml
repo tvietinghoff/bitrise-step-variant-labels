@@ -125,7 +125,7 @@ inputs:
 
       is_expand: true
       is_required: true
-  - variant_pattern:
+  - variant_patterns:
     opts:
       title: "variant patterns"
       summary: A list of pattern specifications used to build environment variables, separated by `|`
