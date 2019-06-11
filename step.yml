@@ -98,18 +98,18 @@ inputs:
       summary: Number of the pull request to inspect for labels.
       description: |
         The PR must have the labels configured or defaults must be set in the step configuration or the build will fail.
-        Either this or commit_hash must be specified, otherwise the default flavors will be built only. If pull_request
+        Either this or *commit hash* must be specified, otherwise the default flavors will be built only. If *pull request*
         is specified, it takes precedence.
 
       is_expand: true
       is_required: false
-  - commit_hash: $COMMIT_HASH
+  - commit_hash: $BITRISE_GIT_COMMIT
     opts:
       title: "commit hash"
       summary: Commit hash of the commit merging the PR.
       description: |
         The PR must have the labels configured or defaults must be set in the step configuration or the build will fail.
-        Either this or pull_request must be specified, otherwise the default flavors will be built only. If pull_request
+        Either this or *pull request* must be specified, otherwise the default flavors will be built only. If *pull request*
         is specified, it takes precedence.
 
       is_expand: true
