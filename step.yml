@@ -88,11 +88,11 @@ inputs:
 
       is_expand: true
       is_required: false
-  - repo_path: $GITLAB_PROJECT_PATH
+  - project_path: $GITLAB_PROJECT_PATH
     opts:
       title: "Gitlab project path"
       description: |
-        Full ath of the gitlab project. Required if provider is gitlab.
+        Full path of the gitlab project. Required if provider is gitlab.
       is_expand: true
       is_required: false
 
@@ -171,10 +171,10 @@ inputs:
         this exports the environment variable `GRADLE_TASK` with the value `assembleFullBlueRelease,assembleFullOrangeRelease`
         (camelCasing the variant names is done automatically)
 
-        `VARIANTS=#1Release` -> with flavor label specification `trial=demo,full` and PR label `trial` set this
+        `VARIANTS=#1Release` -> with flavor label specification `trial=demo,full` and PR label `trial` set, this
         exports the environment variable `VARIANTS` withe the value `demoRelease`
 
-        The dimension index is one-based and determined by the order of the dimension in the flavor_labels specification.
+        The dimension index is one-based and determined by the order of the dimension in the variant_labels specification.
 
       is_expand: true
       is_required: true
