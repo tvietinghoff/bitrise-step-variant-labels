@@ -178,6 +178,40 @@ inputs:
 
       is_expand: true
       is_required: true
+  - export_description:
+    opts:
+      title: "PR description export"
+      description: |
+        Export the pull request description to a file so it can be included e.g. in the version notes. Expects the path
+        to the file to export the description to. The file can have .html or .txt extension, which will determine which
+        description format is stored. If no extension is given, both formats will be exported by appending .html and .txt
+        to the path respectively.
+
+      is_expand: false
+      is_required: false
+  - labels2env:
+    opts:
+      title: "Set environment variables based on PR labels"
+      description: |
+        Matches labels with environment label specifications, e.g. "skip_build,dist_*=distribute" and generates environment
+        variables thereof.
+
+        Label specification types:
+        `some_label`: If "some_label" is set in labels, generates an environment variable `some_label` with the content
+        	`some_label`
+
+        `prefix_*`: If any label matching "prefix_*" is found, generates an environment variable with the name and content
+        	of what the placeholder * represents.
+        	Example: `dist_*`
+        		When labels `dist_internal` and `dist_external` are set at the PR, this will create the following variables:
+        		`internal=internal`
+        		`external=external`
+
+        `prefix_*=key`: If any label matching `prefix_*` is found, sets the environment variable named `key` with the
+        	content being a comma-separated list of all values that were found represented by the * placeholder.
+        	Example: `dist_*=distribute`
+        		When labels `dist_internal` and `dist_external` are set at the PR, this will create the following variable:
+        		`distribute=internal,external`
 
 outputs:
   - VARIANTS:
