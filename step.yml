@@ -187,7 +187,7 @@ inputs:
         description format is stored. If no extension is given, both formats will be exported by appending .html and .txt
         to the path respectively.
 
-      is_expand: false
+      is_expand: true
       is_required: false
   - labels2env:
     opts:
