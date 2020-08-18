@@ -193,12 +193,16 @@ inputs:
     opts:
       title: "Set environment variables based on PR labels"
       description: |
-        Matches labels with environment label specifications, e.g. "skip_build,dist_*=distribute" and generates environment
+        Matches labels with environment label specifications, e.g. `skip_dist=yes,dist_*=distribute` and generates environment
         variables thereof.
 
         Label specification types:
+
         `some_label`: If "some_label" is set in labels, generates an environment variable `some_label` with the content
         	`some_label`
+
+        `some_label=value`: If "some_label" is set in labels, generates an environment variable `some_label` with the content
+        	`value`
 
         `prefix_*`: If any label matching "prefix_*" is found, generates an environment variable with the name and content
         	of what the placeholder * represents.

@@ -589,15 +589,20 @@ func label2Env(conf Conf, labels map[string]bool) {
 		parts := strings.Split(envspec, "=")
 		pattern := parts[0]
 		var labelRegex *regexp.Regexp
+		var envKey string
+		var envValue string
 		if strings.Contains(pattern, "*") {
 			pattern = strings.ReplaceAll(pattern, "*", "(.*)")
 			labelRegex, _ = regexp.Compile(pattern)
+			if (len(parts)) > 1 {
+				envKey = parts[1]
+			}
 		} else {
 			labelRegex, _ = regexp.Compile(regexp.QuoteMeta(pattern))
-		}
-		var envKey string
-		if (len(parts)) > 1 {
-			envKey = parts[1]
+			envKey = parts[0]
+			if (len(parts)) > 1 {
+				envValue = parts[1]
+			}
 		}
 
 		for label, _ := range labels {
@@ -607,7 +612,9 @@ func label2Env(conf Conf, labels map[string]bool) {
 			}
 			var key string
 			var value string
-			if len(matches) == 1 {
+			if len(envValue) > 0 {
+				value = envValue
+			} else if len(matches) == 1 {
 				value = matches[0]
 			} else {
 				value = matches[1]
