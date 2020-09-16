@@ -95,6 +95,8 @@ type MergeRequestLabelGitlab struct {
 type MergeRequestGitlab struct {
 	Description     string `json:"description"`
 	DescriptionHtml string `json:"descriptionHtml"`
+	Title           string `json:"title"`
+	TitleHtml       string `json:"titleHtml"`
 	MergeCommitSha  string `json:"mergeCommitSha"`
 	Labels          struct {
 		Edges []MergeRequestLabelGitlab `json:"edges"`
@@ -303,6 +305,8 @@ func fetchMergeRequestForPRGitlab(conf Conf) *MergeRequestGitlab {
 		"query {
 			project(fullPath: \"$ProjectPath\") {
 				mergeRequest(iid: \"$PullRequest\") {
+					title,
+					titleHtml,
 					description,
 					descriptionHtml,
 	  		  		mergeCommitSha,
@@ -335,8 +339,8 @@ func maybeExportDescription(conf Conf, mergeRequest MergeRequestGitlab) {
 	if len(conf.ExportDescription) == 0 {
 		return
 	}
-	description := mergeRequest.Description
-	html := mergeRequest.DescriptionHtml
+	description := mergeRequest.Title + "\n\n" + mergeRequest.Description
+	html := mergeRequest.TitleHtml + "<br><br>" + mergeRequest.DescriptionHtml
 
 	ext := filepath.Ext(conf.ExportDescription)
 	if len(ext) == 0 || strings.ToLower(ext) == ".txt" {
@@ -432,6 +436,8 @@ func fetchMergeRequestForCommitGitlab(conf Conf) *MergeRequestGitlab {
 				mergeRequests(first: 50, state: merged) {
 					edges {
 						node {
+							title,
+							titleHtml,
 							description,
 							descriptionHtml,
 							mergeCommitSha,
