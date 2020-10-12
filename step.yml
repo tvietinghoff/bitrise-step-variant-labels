@@ -64,30 +64,44 @@ toolkit:
 
 
 inputs:
+  - provider:
+    opts:
+      title: "git provider"
+      summary: Provider of the git repository.
+      description: |
+        Provider of the git repository. Can be "github" or "gitlab". Default is github.
   - repo_owner: $GITHUB_REPO_OWNER
     opts:
       title: "github repo owner"
       summary: Owner of the github repo.
       description: |
-        Owner of the github repo.
+        Owner of the github repo. Required if provider is github.
 
       is_expand: true
-      is_required: true
+      is_required: false
   - repo_name: $GITHUB_REPO_NAME
     opts:
       title: "github repo name"
       summary: Name of the github repo.
       description: |
-        Name of the github repo.
+        Name of the github repo. Required if provider is github.
 
       is_expand: true
-      is_required: true
-  - auth_token: $GITHUB_TOKEN
+      is_required: false
+  - project_path: $GITLAB_PROJECT_PATH
     opts:
-      title: "github auth token"
-      summary: Github authentication token with access to the repo.
+      title: "Gitlab project path"
       description: |
-        A github authentication token with sufficient rights to the github repo to extract pull request information.
+        Full path of the gitlab project. Required if provider is gitlab.
+      is_expand: true
+      is_required: false
+
+  - auth_token: $GIT_AUTH_TOKEN
+    opts:
+      title: "github / gitlab auth token"
+      summary: Github / Gitlab authentication token with access to the repo.
+      description: |
+        A github / gitlab API authentication token with sufficient rights to the repo to extract pull request information.
 
       is_expand: true
       is_required: true
@@ -114,12 +128,12 @@ inputs:
 
       is_expand: true
       is_required: false
-  - flavor_labels:
+  - variant_labels:
     opts:
-      title: "flavor labels"
+      title: "variant labels"
       summary: The labels to use for generating the variant names
       description: |
-        Flavor labels is a comma-separated list of label names that will designate flavors to build. Multiple flavor
+        Variant labels is a comma-separated list of label names that will designate variants to build. Multiple flavor
         dimensions can be specified by separating a flavor list with "|". Prefixing a label name with "!" will select
         it as the flavor of the respective dimension if no labels for that dimension are set at the PR. There can be
         only one default flavor per dimension.
@@ -157,13 +171,51 @@ inputs:
         this exports the environment variable `GRADLE_TASK` with the value `assembleFullBlueRelease,assembleFullOrangeRelease`
         (camelCasing the variant names is done automatically)
 
-        `VARIANTS=#1Release` -> with flavor label specification `trial=demo,full` and PR label `trial` set this
+        `VARIANTS=#1Release` -> with flavor label specification `trial=demo,full` and PR label `trial` set, this
         exports the environment variable `VARIANTS` withe the value `demoRelease`
 
-        The dimension index is one-based and determined by the order of the dimension in the flavor_labels specification.
+        The dimension index is one-based and determined by the order of the dimension in the variant_labels specification.
 
       is_expand: true
       is_required: true
+  - export_description:
+    opts:
+      title: "PR description export"
+      description: |
+        Export the pull request description to a file so it can be included e.g. in the version notes. Expects the path
+        to the file to export the description to. The file can have .html or .txt extension, which will determine which
+        description format is stored. If no extension is given, both formats will be exported by appending .html and .txt
+        to the path respectively.
+
+      is_expand: true
+      is_required: false
+  - labels2env:
+    opts:
+      title: "Set environment variables based on PR labels"
+      description: |
+        Matches labels with environment label specifications, e.g. `skip_dist=yes,dist_*=distribute` and generates environment
+        variables thereof.
+
+        Label specification types:
+
+        `some_label`: If "some_label" is set in labels, generates an environment variable `some_label` with the content
+        	`some_label`
+
+        `some_label=value`: If "some_label" is set in labels, generates an environment variable `some_label` with the content
+        	`value`
+
+        `prefix_*`: If any label matching "prefix_*" is found, generates an environment variable with the name and content
+        	of what the placeholder * represents.
+        	Example: `dist_*`
+        		When labels `dist_internal` and `dist_external` are set at the PR, this will create the following variables:
+        		`internal=internal`
+        		`external=external`
+
+        `prefix_*=key`: If any label matching `prefix_*` is found, sets the environment variable named `key` with the
+        	content being a comma-separated list of all values that were found represented by the * placeholder.
+        	Example: `dist_*=distribute`
+        		When labels `dist_internal` and `dist_external` are set at the PR, this will create the following variable:
+        		`distribute=internal,external`
 
 outputs:
   - VARIANTS:

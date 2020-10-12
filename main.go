@@ -7,23 +7,29 @@ import (
 	"github.com/bitrise-io/go-steputils/tools"
 	"github.com/bitrise-io/go-utils/log"
 	"github.com/bitrise-tools/go-steputils/stepconf"
+	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
 
 type Conf struct {
-	RepoOwner       string `env:"repo_owner,required"`
-	RepoName        string `env:"repo_name,required"`
-	AuthToken       string `env:"auth_token,required"`
-	PullRequest     int    `env:"pull_request"`
-	CommitHash      string `env:"commit_hash"`
-	FlavorLabels    string `env:"flavor_labels,required"`
-	VariantPatterns string `env:"variant_patterns,required"`
+	Provider          string `env:"provider"`
+	ProjectPath       string `env:"project_path"`
+	RepoOwner         string `env:"repo_owner"`
+	RepoName          string `env:"repo_name"`
+	AuthToken         string `env:"auth_token,required"`
+	PullRequest       int    `env:"pull_request"`
+	CommitHash        string `env:"commit_hash"`
+	VariantLabels     string `env:"variant_labels,required"`
+	VariantPatterns   string `env:"variant_patterns,required"`
+	ExportDescription string `env:"export_description"`
+	Labels2Env        string `env:"labels2env"`
 }
 
-type PRGraphQLResponse struct {
+type PRGraphQLResponseGithub struct {
 	Data struct {
 		Repository struct {
 			PullRequest struct {
@@ -38,8 +44,28 @@ type PRGraphQLResponse struct {
 		} `json:"repository"`
 	} `json:"data"`
 }
+type PRGraphQLResponseGitlab struct {
+	Data struct {
+		Project struct {
+			MergeRequest MergeRequestGitlab `json:"mergeRequest"`
+			/*			MergeRequest struct {
+							Description     string `json:"description"`
+							DescriptionHtml string `json:"descriptionHtml"`
+							MergeCommitSha  string `json:"mergeCommitSha"`
+							Labels          struct {
+								Edges []struct {
+									Node struct {
+										Title string `json:"title"`
+									} `json:"node"`
+								} `json:"edges"`
+							} `json:"labels"`
+						} `json:"mergeRequest"`
+			*/
+		} `json:"project"`
+	} `json:"data"`
+}
 
-type MergeGraphQLResponse struct {
+type MergeGraphQLResponseGithub struct {
 	Data struct {
 		Repository struct {
 			Object struct {
@@ -61,6 +87,35 @@ type MergeGraphQLResponse struct {
 	} `json:"data"`
 }
 
+type MergeRequestLabelGitlab struct {
+	Node struct {
+		Title string `json:"title"`
+	} `json:"node"`
+}
+type MergeRequestGitlab struct {
+	Description     string `json:"description"`
+	DescriptionHtml string `json:"descriptionHtml"`
+	Title           string `json:"title"`
+	TitleHtml       string `json:"titleHtml"`
+	MergeCommitSha  string `json:"mergeCommitSha"`
+	Labels          struct {
+		Edges []MergeRequestLabelGitlab `json:"edges"`
+	} `json:"labels"`
+}
+type MergeRequestGitlabEdge struct {
+	Node MergeRequestGitlab `json:"node"`
+}
+
+type MergeGraphQLResponseGitlab struct {
+	Data struct {
+		Project struct {
+			MergeRequests struct {
+				Edges []MergeRequestGitlabEdge `json:"edges"`
+			} `json:"mergeRequests"`
+		} `json:"project"`
+	} `json:"data"`
+}
+
 func fail(message string, args ...interface{}) {
 	log.Errorf(message, args...)
 	os.Exit(1)
@@ -77,9 +132,28 @@ func main() {
 
 	stepconf.Print(printconf)
 
+	if len(conf.Provider) == 0 {
+		conf.Provider = "github"
+	}
+
+	if conf.Provider == "github" {
+		if len(conf.RepoName) == 0 {
+			fail("Missing repo name argument")
+		}
+		if len(conf.RepoOwner) == 0 {
+			fail("Missing repo owner argument")
+		}
+	} else if conf.Provider == "gitlab" {
+		if len(conf.ProjectPath) == 0 {
+			fail("Missing project path argument")
+		}
+	} else {
+		fail("Invalid provider: %v. Allowed are: github, gitlab", conf.Provider)
+	}
+
 	flavorDimensions, flavors := getFlavorDimensions(conf)
 	if len(flavorDimensions) == 0 {
-		fail("failed to parse flavor labels, check input: %v", conf.FlavorLabels)
+		fail("failed to parse flavor labels, check input: %v", conf.VariantLabels)
 	}
 
 	variantPatternRegex := regexp.MustCompile(`#\d`)
@@ -104,10 +178,11 @@ func main() {
 		variantPatterns[key] = pattern
 	}
 
+	var labels = make(map[string]bool)
 	if conf.PullRequest != 0 {
-		fetchFlavorDimensionsForPR(conf, flavors, flavorDimensions)
+		labels = fetchFlavorDimensionsForPR(conf, flavors, flavorDimensions)
 	} else if conf.CommitHash != "" {
-		fetchFlavorDimensionsForCommit(conf, flavors, flavorDimensions)
+		labels = fetchFlavorDimensionsForCommit(conf, flavors, flavorDimensions)
 	} else {
 		log.Warnf("Neither commit_hash nor pull_request given. Building defaults only.")
 		for index, dimension := range flavorDimensions {
@@ -115,7 +190,10 @@ func main() {
 				fail("Missing default for flavor dimension %d, aborting...", index)
 			}
 		}
+		labels = nil
 	}
+
+	label2Env(conf, labels)
 
 	for key, pattern := range variantPatterns {
 		generateEnvironmentVariable(key, pattern, flavorDimensions)
@@ -124,7 +202,29 @@ func main() {
 	os.Exit(0)
 }
 
-func fetchFlavorDimensionsForPR(conf Conf, flavors map[string]int, flavorDimensions map[int]FlavorDimension) {
+func fetchFlavorDimensionsForPR(conf Conf, flavors map[string]int, flavorDimensions map[int]FlavorDimension) map[string]bool {
+	if conf.Provider == "github" {
+		return fetchFlavorDimensionsForPRGithub(conf, flavors, flavorDimensions)
+	} else if conf.Provider == "gitlab" {
+		return processPRGitlab(conf, flavors, flavorDimensions)
+	} else {
+		// should not be reached, provider is checked up front
+		fail("Invalid provider %v", conf.Provider)
+	}
+	return nil
+}
+func fetchFlavorDimensionsForCommit(conf Conf, flavors map[string]int, flavorDimensions map[int]FlavorDimension) map[string]bool {
+	if conf.Provider == "github" {
+		return fetchFlavorDimensionsForCommitGithub(conf, flavors, flavorDimensions)
+	} else if conf.Provider == "gitlab" {
+		return fetchFlavorDimensionsForCommitGitlab(conf, flavors, flavorDimensions)
+	} else {
+		// should not be reached, provider is checked up front
+		fail("Invalid provider %v", conf.Provider)
+		return nil
+	}
+}
+func fetchFlavorDimensionsForPRGithub(conf Conf, flavors map[string]int, flavorDimensions map[int]FlavorDimension) map[string]bool {
 	requestBody := `
 	{ "query": 
 		"{
@@ -148,11 +248,12 @@ func fetchFlavorDimensionsForPR(conf Conf, flavors map[string]int, flavorDimensi
 		"\n", " ",
 		"\t", ""}
 	err, jsonResponse := graphQLRequest(requestBody, replacements, conf)
-	var graphQLResponse PRGraphQLResponse
+	var graphQLResponse PRGraphQLResponseGithub
 	err = json.NewDecoder(strings.NewReader(jsonResponse)).Decode(&graphQLResponse)
 	if err != nil {
 		fail("failed to decode graphql response: %v\n", err)
 	}
+	var labels = make(map[string]bool)
 	for _, label := range graphQLResponse.Data.Repository.PullRequest.Labels.Edges {
 		labelName := label.Node.Name
 		dimension := flavors[labelName]
@@ -160,10 +261,107 @@ func fetchFlavorDimensionsForPR(conf Conf, flavors map[string]int, flavorDimensi
 			flavorDimensions[dimension].SelectedFlavors[labelName] = true
 			fmt.Printf("Found label for flavor %s\n", labelName)
 		}
+		labels[labelName] = true
+	}
+	return labels
+}
+
+func processPRGitlab(conf Conf, flavors map[string]int, flavorDimensions map[int]FlavorDimension) map[string]bool {
+	mergeRequest := fetchMergeRequestForPRGitlab(conf)
+
+	if mergeRequest == nil {
+		log.Warnf("Merge request not found, applying defaults...")
+		return nil
+	}
+
+	maybeExportDescription(conf, *mergeRequest)
+
+	return processFlavorsGitlab(*mergeRequest, flavors, flavorDimensions)
+}
+
+func processFlavorsGitlab(mergeRequest MergeRequestGitlab, flavors map[string]int, flavorDimensions map[int]FlavorDimension) map[string]bool {
+	mrLabels := mergeRequest.Labels.Edges
+	if len(mrLabels) == 0 {
+		log.Warnf("No labels found, applying defaults...")
+		return nil
+	}
+	var labels = make(map[string]bool)
+	for _, label := range mrLabels {
+		labelName := label.Node.Title
+		dimension := flavors[labelName]
+		if dimension != 0 {
+			flavorDimensions[dimension].SelectedFlavors[labelName] = true
+			variant := flavorDimensions[dimension].Flavors[labelName]
+			fmt.Printf("Found label for variant %s\n", variant)
+		}
+		labels[labelName] = true
+	}
+	return labels
+}
+
+func fetchMergeRequestForPRGitlab(conf Conf) *MergeRequestGitlab {
+	requestBody := `
+	{ "query":
+		"query {
+			project(fullPath: \"$ProjectPath\") {
+				mergeRequest(iid: \"$PullRequest\") {
+					title,
+					titleHtml,
+					description,
+					descriptionHtml,
+	  		  		mergeCommitSha,
+					labels {
+						edges {
+		  					node {
+								title
+		  					}
+						}
+					}
+				}
+			}
+	  	}"
+	}`
+	replacements := []string{
+		"$ProjectPath", conf.ProjectPath,
+		"$PullRequest", fmt.Sprintf("%d", conf.PullRequest),
+		"\n", " ",
+		"\t", ""}
+	err, jsonResponse := graphQLRequest(requestBody, replacements, conf)
+	var graphQLResponse PRGraphQLResponseGitlab
+	err = json.NewDecoder(strings.NewReader(jsonResponse)).Decode(&graphQLResponse)
+	if err != nil {
+		fail("failed to decode graphql response: %v\n", err)
+	}
+	return &graphQLResponse.Data.Project.MergeRequest
+}
+
+func maybeExportDescription(conf Conf, mergeRequest MergeRequestGitlab) {
+	if len(conf.ExportDescription) == 0 {
+		return
+	}
+	description := mergeRequest.Title + "\n\n" + mergeRequest.Description
+	html := mergeRequest.TitleHtml + "<br><br>" + mergeRequest.DescriptionHtml
+
+	ext := filepath.Ext(conf.ExportDescription)
+	if len(ext) == 0 || strings.ToLower(ext) == ".txt" {
+		if len(description) == 0 {
+			log.Warnf("Text description not available, but export was requested")
+		} else {
+			path := strings.TrimSuffix(conf.ExportDescription, ".txt") + ".txt"
+			ioutil.WriteFile(path, []byte(description), 0644)
+		}
+	}
+	if len(ext) == 0 || strings.ToLower(ext) == ".html" {
+		if len(html) == 0 {
+			log.Warnf("HTML description not available, but export was requested")
+		} else {
+			path := strings.TrimSuffix(conf.ExportDescription, ".html") + ".html"
+			ioutil.WriteFile(path, []byte(html), 0644)
+		}
 	}
 }
 
-func fetchFlavorDimensionsForCommit(conf Conf, flavors map[string]int, flavorDimensions map[int]FlavorDimension) {
+func fetchFlavorDimensionsForCommitGithub(conf Conf, flavors map[string]int, flavorDimensions map[int]FlavorDimension) map[string]bool {
 	requestBody := `
 	{ "query": 
 		"{
@@ -195,15 +393,16 @@ func fetchFlavorDimensionsForCommit(conf Conf, flavors map[string]int, flavorDim
 		"\n", " ",
 		"\t", ""}
 	err, jsonResponse := graphQLRequest(requestBody, replacements, conf)
-	var graphQLResponse MergeGraphQLResponse
+	var graphQLResponse MergeGraphQLResponseGithub
 	err = json.NewDecoder(strings.NewReader(jsonResponse)).Decode(&graphQLResponse)
 	if err != nil {
 		fail("failed to decode graphql response: %v\n", err)
 	}
 	if len(graphQLResponse.Data.Repository.Object.PullRequests.Edges) == 0 {
 		log.Warnf("No associated pull request found, applying defaults...", err)
-		return
+		return nil
 	}
+	var labels = make(map[string]bool)
 	for _, label := range graphQLResponse.Data.Repository.Object.PullRequests.Edges[0].Node.Labels.Edges {
 		labelName := label.Node.Name
 		dimension := flavors[labelName]
@@ -211,12 +410,84 @@ func fetchFlavorDimensionsForCommit(conf Conf, flavors map[string]int, flavorDim
 			flavorDimensions[dimension].SelectedFlavors[labelName] = true
 			fmt.Printf("Found label for flavor %s\n", labelName)
 		}
+		labels[labelName] = true
 	}
+	return labels
+}
+
+func fetchFlavorDimensionsForCommitGitlab(conf Conf, flavors map[string]int, flavorDimensions map[int]FlavorDimension) map[string]bool {
+	mergeRequest := fetchMergeRequestForCommitGitlab(conf)
+
+	if mergeRequest == nil {
+		log.Warnf("No merge requests found for commit, applying defaults...")
+		return nil
+	}
+
+	maybeExportDescription(conf, *mergeRequest)
+
+	return processFlavorsGitlab(*mergeRequest, flavors, flavorDimensions)
+}
+
+func fetchMergeRequestForCommitGitlab(conf Conf) *MergeRequestGitlab {
+	requestBody := `
+	{ "query":
+		"query {
+			project(fullPath: \"$ProjectPath\") {
+				mergeRequests(first: 50, state: merged) {
+					edges {
+						node {
+							title,
+							titleHtml,
+							description,
+							descriptionHtml,
+							mergeCommitSha,
+							labels {
+								edges {
+		  							node {
+										title
+		  							}
+								}
+							}
+						}
+					}
+				}
+			}
+	  	}"
+	}`
+	replacements := []string{
+		"$ProjectPath", conf.ProjectPath,
+		"\n", " ",
+		"\t", ""}
+	err, jsonResponse := graphQLRequest(requestBody, replacements, conf)
+	var graphQLResponse MergeGraphQLResponseGitlab
+	err = json.NewDecoder(strings.NewReader(jsonResponse)).Decode(&graphQLResponse)
+	if err != nil {
+		fail("failed to decode graphql response: %v\n", err)
+	}
+	if len(graphQLResponse.Data.Project.MergeRequests.Edges) == 0 {
+		return nil
+	}
+
+	mergeRequests := graphQLResponse.Data.Project.MergeRequests.Edges
+	for _, mr := range mergeRequests {
+		if mr.Node.MergeCommitSha == conf.CommitHash {
+			return &mr.Node
+		}
+	}
+	return nil
 }
 
 func graphQLRequest(requestBody string, replacements []string, conf Conf) (error, string) {
 	requestBody = strings.NewReplacer(replacements...).Replace(requestBody)
-	request, err := http.NewRequest("POST", "https://api.github.com/graphql", strings.NewReader(requestBody))
+	url := ""
+	if conf.Provider == "github" {
+		url = "https://api.github.com/graphql"
+	} else if conf.Provider == "gitlab" {
+		url = "https://gitlab.com/api/graphql"
+	} else {
+		fail("Invalid provider %v", conf.Provider)
+	}
+	request, err := http.NewRequest("POST", url, strings.NewReader(requestBody))
 	if err != nil {
 		fail("failed to create request: %v\n", err)
 	}
@@ -295,6 +566,85 @@ func generateEnvironmentVariable(key string, pattern string, flavorDimensions ma
 	}
 }
 
+/**
+matches labels with environment label specifications "skip_build,dist_*=distribute" and generates environment
+variables thereof.
+
+Label specification types:
+"some_label": If "some_label" is set in labels, generates an environment variable "some_label" with the content
+	"some_label"
+
+"prefix_*": If any label matching "prefix_*" is found, generates an environment variable with the name and content
+	of what the placeholder * represents.
+	Example: dist_*
+		When labels dist_internal and dist_external are set at the PR, this will create the following variables:
+		internal=internal
+		external=external
+
+"prefix_*=key": If any label matching "prefix_*" is found, sets the environment variable named "key" with the
+	content being a comma-separated list of all values that were found represented by the * placeholder.
+	Example: dist_*=distribute
+		When labels dist_internal and dist_external are set at the PR, this will create the following variable:
+		distribute=internal,external
+
+*/
+func label2Env(conf Conf, labels map[string]bool) {
+	envvars := make(map[string]string)
+
+	for _, envspec := range strings.Split(conf.Labels2Env, ",") {
+		parts := strings.Split(envspec, "=")
+		pattern := parts[0]
+		var labelRegex *regexp.Regexp
+		var envKey string
+		var envValue string
+		if strings.Contains(pattern, "*") {
+			pattern = strings.ReplaceAll(pattern, "*", "(.*)")
+			labelRegex, _ = regexp.Compile(pattern)
+			if (len(parts)) > 1 {
+				envKey = parts[1]
+			}
+		} else {
+			labelRegex, _ = regexp.Compile(regexp.QuoteMeta(pattern))
+			envKey = parts[0]
+			if (len(parts)) > 1 {
+				envValue = parts[1]
+			}
+		}
+
+		for label, _ := range labels {
+			matches := labelRegex.FindStringSubmatch(label)
+			if len(matches) == 0 {
+				continue
+			}
+			var key string
+			var value string
+			if len(envValue) > 0 {
+				value = envValue
+			} else if len(matches) == 1 {
+				value = matches[0]
+			} else {
+				value = matches[1]
+			}
+			if len(envKey) == 0 {
+				key = value
+			} else {
+				key = envKey
+			}
+			if len(envvars[key]) != 0 {
+				envvars[key] = envvars[key] + "," + value
+			} else {
+				envvars[key] = value
+			}
+		}
+	}
+	for key, value := range envvars {
+		err := tools.ExportEnvironmentWithEnvman(key, value)
+		if err != nil {
+			fmt.Printf("Failed to export environment variable: %s=%s: %v\n", key, value, err)
+		}
+	}
+}
+
 type FlavorDimension struct {
 	Index           int
 	Flavors         map[string]string
@@ -305,7 +655,7 @@ type FlavorDimension struct {
 func getFlavorDimensions(conf Conf) (map[int]FlavorDimension, map[string]int) {
 	flavorDimensions := make(map[int]FlavorDimension)
 	flavors := make(map[string]int)
-	for i, group := range strings.Split(conf.FlavorLabels, "|") {
+	for i, group := range strings.Split(conf.VariantLabels, "|") {
 		index := i + 1
 		for _, label := range strings.Split(strings.Trim(group, " "), ",") {
 			label = strings.Trim(label, " ")
