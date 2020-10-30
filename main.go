@@ -616,6 +616,8 @@ func label2Env(conf Conf, labels map[string]bool) {
 			if len(matches) == 0 {
 				continue
 			}
+			fmt.Printf("Found label for envvar: %s\n", label)
+
 			var key string
 			var value string
 			if len(envValue) > 0 {
@@ -638,6 +640,7 @@ func label2Env(conf Conf, labels map[string]bool) {
 		}
 	}
 	for key, value := range envvars {
+		fmt.Printf("%s = %s\n", key, value)
 		err := tools.ExportEnvironmentWithEnvman(key, value)
 		if err != nil {
 			fmt.Printf("Failed to export environment variable: %s=%s: %v\n", key, value, err)
