@@ -288,15 +288,31 @@ func processFlavorsGitlab(mergeRequest MergeRequestGitlab, flavors map[string]in
 	var labels = make(map[string]bool)
 	for _, label := range mrLabels {
 		labelName := label.Node.Title
-		dimension := flavors[labelName]
-		if dimension != 0 {
-			flavorDimensions[dimension].SelectedFlavors[labelName] = true
-			variant := flavorDimensions[dimension].Flavors[labelName]
-			fmt.Printf("Found label for variant %s\n", variant)
-		}
+		selectFlavor(labelName, labelName, flavors, flavorDimensions)
 		labels[labelName] = true
 	}
+	for flavorKey, _ := range flavors {
+		if strings.Contains(flavorKey, "*") {
+			pattern := strings.ReplaceAll(flavorKey, "*", "(.*)")
+			labelRegex, _ := regexp.Compile(pattern)
+			for label, _ := range labels {
+				matches := labelRegex.FindStringSubmatch(label)
+				if len(matches) < 2 {
+					continue
+				}
+				selectFlavor(flavorKey, matches[1], flavors, flavorDimensions)
+			}
+		}
+	}
 	return labels
+}
+
+func selectFlavor(key string, value string, flavors map[string]int, flavorDimensions map[int]FlavorDimension) {
+	dimension := flavors[key]
+	if dimension != 0 {
+		flavorDimensions[dimension].SelectedFlavors[value] = true
+		fmt.Printf("Found label for variant:%s\n", value)
+	}
 }
 
 func fetchMergeRequestForPRGitlab(conf Conf) *MergeRequestGitlab {
