@@ -11,11 +11,11 @@ import (
 
 type PrLabelProcessor interface {
 	getConf() common.Conf
-	processLabelsForPR(dimensions map[int]buildvariants.FlavorDimension) map[string]bool
-	processLabelsForCommit(dimensions map[int]buildvariants.FlavorDimension) map[string]bool
+	processLabelsForPR(dimensions []buildvariants.FlavorDimension) map[string]bool
+	processLabelsForCommit(dimensions []buildvariants.FlavorDimension) map[string]bool
 }
 
-func ProcessLabels(p PrLabelProcessor, flavorDimensions map[int]buildvariants.FlavorDimension) map[string]bool {
+func ProcessLabels(p PrLabelProcessor, flavorDimensions []buildvariants.FlavorDimension) map[string]bool {
 	var labels map[string]bool
 	conf := p.getConf()
 	if conf.PullRequest != 0 {
@@ -47,7 +47,10 @@ func maybeExportDescription(conf common.Conf, mergeRequest MergeRequestGitlab) {
 			log.Warnf("Text description not available, but export was requested")
 		} else {
 			path := strings.TrimSuffix(conf.ExportDescription, ".txt") + ".txt"
-			ioutil.WriteFile(path, []byte(description), 0644)
+			err := ioutil.WriteFile(path, []byte(description), 0644)
+			if err != nil {
+				log.Warnf("Writing description failed: File: %s", path)
+			}
 		}
 	}
 	if len(ext) == 0 || strings.ToLower(ext) == ".html" {
@@ -55,7 +58,10 @@ func maybeExportDescription(conf common.Conf, mergeRequest MergeRequestGitlab) {
 			log.Warnf("HTML description not available, but export was requested")
 		} else {
 			path := strings.TrimSuffix(conf.ExportDescription, ".html") + ".html"
-			ioutil.WriteFile(path, []byte(html), 0644)
+			err := ioutil.WriteFile(path, []byte(html), 0644)
+			if err != nil {
+				log.Warnf("Writing description failed: File: %s", path)
+			}
 		}
 	}
 }

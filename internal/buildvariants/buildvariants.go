@@ -8,7 +8,6 @@ import (
 )
 
 type FlavorDimension struct {
-	Index           int
 	LabelMatcher    string
 	LabelRegex      *regexp.Regexp
 	FlavorNames     map[string]string
@@ -17,13 +16,13 @@ type FlavorDimension struct {
 	SelectedFlavors map[string]bool
 }
 
-func SelectFlavorsFromLabels(labels map[string]bool, flavorDimensions map[int]FlavorDimension) {
+func SelectFlavorsFromLabels(labels map[string]bool, flavorDimensions []FlavorDimension) {
 	for label := range labels {
 		selectFlavor(label, flavorDimensions)
 	}
 }
 
-func selectFlavor(label string, flavorDimensions map[int]FlavorDimension) {
+func selectFlavor(label string, flavorDimensions []FlavorDimension) {
 	for _, flavorDimension := range flavorDimensions {
 		if flavorDimension.LabelRegex == nil {
 			flavorDimension.LabelRegex, _ = regexp.Compile(flavorDimension.LabelMatcher)
@@ -56,10 +55,10 @@ func selectFlavor(label string, flavorDimensions map[int]FlavorDimension) {
 	}
 }
 
-func GetFlavorDimensions(conf Conf) map[int]FlavorDimension {
-	flavorDimensions := make(map[int]FlavorDimension)
-	for i, group := range strings.Split(conf.VariantLabels, "|") {
-		index := i + 1
+func GetFlavorDimensions(conf Conf) []FlavorDimension {
+	dimensionSpecs := strings.Split(conf.VariantLabels, "|")
+	flavorDimensions := make([]FlavorDimension, 0, len(dimensionSpecs))
+	for index, group := range dimensionSpecs {
 		for _, label := range strings.Split(strings.Trim(group, " "), ",") {
 			label = strings.Trim(label, " ")
 			isDefault := strings.HasPrefix(label, "!")
@@ -74,12 +73,16 @@ func GetFlavorDimensions(conf Conf) map[int]FlavorDimension {
 				label = label[:flavorNamePos]
 			}
 
-			flavorDimension := flavorDimensions[index]
-			if flavorDimension.Index == 0 {
-				flavorDimension.Index = index
-				flavorDimension.LabelMatcher = ""
-				flavorDimension.FlavorNames = make(map[string]string)
-				flavorDimension.SelectedFlavors = make(map[string]bool)
+			if len(flavorDimensions) <= index {
+				flavorDimensions = append(flavorDimensions, FlavorDimension{
+					LabelMatcher:    "",
+					FlavorNames:     make(map[string]string),
+					SelectedFlavors: make(map[string]bool),
+				})
+			}
+			flavorDimension := &flavorDimensions[index]
+			if isDefault {
+				flavorDimension.DefaultFlavor = label
 			}
 
 			// generate or add a matcher pattern for the label
@@ -93,19 +96,19 @@ func GetFlavorDimensions(conf Conf) map[int]FlavorDimension {
 				// label spec is verbatim, build a list of alternatives from the provided labels
 				if len(flavorDimension.LabelMatcher) > 0 {
 					if strings.Contains(flavorDimension.LabelMatcher, "*") {
+						if isDefault {
+							continue
+						}
 						Fail("Cannot mix and match verbatim labels and label patterns:\n%s\n%s",
 							flavorDimension.LabelMatcher, label)
+					} else {
+						flavorDimension.LabelMatcher += "|"
 					}
-					flavorDimension.LabelMatcher += "|"
 				}
 				flavorDimension.LabelMatcher += "(^" + label + "$)"
 				flavorDimension.FlavorNames[label] = flavorName
 			}
 
-			if isDefault {
-				flavorDimension.DefaultFlavor = label
-			}
-			flavorDimensions[index] = flavorDimension
 		}
 	}
 	return flavorDimensions

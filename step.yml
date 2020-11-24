@@ -112,7 +112,7 @@ inputs:
       summary: Number of the pull request to inspect for labels.
       description: |
         The PR must have the labels configured or defaults must be set in the step configuration or the build will fail.
-        Either this or *commit hash* must be specified, otherwise the default flavors will be built only. If *pull request*
+        Either this or *commit_hash* must be specified, otherwise the default flavors will be built only. If *pull_request*
         is specified, it takes precedence.
 
       is_expand: true
@@ -123,7 +123,7 @@ inputs:
       summary: Commit hash of the commit merging the PR.
       description: |
         The PR must have the labels configured or defaults must be set in the step configuration or the build will fail.
-        Either this or *pull request* must be specified, otherwise the default flavors will be built only. If *pull request*
+        Either this or *pull_request* must be specified, otherwise the default flavors will be built only. If *pull_request*
         is specified, it takes precedence.
 
       is_expand: true
@@ -133,29 +133,45 @@ inputs:
       title: "variant labels"
       summary: The labels to use for generating the variant names
       description: |
-        Variant labels is a comma-separated list of label names that will designate variants to build. Multiple flavor
+        Variant labels specifies PR label names that will designate flavors to build. Multiple flavor
         dimensions can be specified by separating a flavor list with `|`. Prefixing a label name with `!` will select
         it as the flavor of the respective dimension if no labels for that dimension are set at the PR. There can be
         only one default flavor per dimension.
 
-        A label can optionally be associated with the flavor name to use instead of the label name by appending `={flavorName}`
-        to the label name: `trial=demo`. In this case, when the label `trial` is set on the PR, the `demo` flavor will be selected.
+        There are two ways of specifing a flavor dimension, only one of which can be used within each dimension.
 
-        A label can alternatively be specified by a prefix followed by the `*` wildcard character. It will select all
-        variants that correspond to the suffix of all labels set that match the prefix.
+        - `[[!]<label1>=]<value1>[,[<label2>=]<value2>...]`
+            - specifies a list of labels with optional flavor value mapping. If no mapping is specified, the label itself
+          will be taken as the name of the flavor. If the label is prefixed with '!', it will be used as the default if
+          none of the labels are found in the PR.
 
-        Example
-        `full,demo`   -> looks for the labels `full` and `demo` and selects either one as a build flavor. If none is set, the step fails
+        - `<glob_pattern>`[,!<default>]`
+          - specifies a pattern (containing  the '*' wildcard character) which will be matched against the label names
+          and will subsitute the part represented by the wildcard as the flavor in this dimension. The optional default
+          value will be used if no matching labels are found in the PR.
 
-        `full,!demo` -> looks for the labels full and demo and selects either one as a build flavor. If none is set, demo will be selected
+          Examples
+        - `full,demo`
+          - looks for the labels `full` and `demo` and selects either one as a build flavor. If none is set,
+          the step fails
 
-        `full,!demo|orange,blue,!teal` -> two dimensions. With a label set of "blue" and "orange" this will select the flavor
-        combinations `demoBlue` and `demoOrange`
+        - `full,!demo`
+          - looks for the labels full and demo and selects either one as a build flavor. If none is set,
+          demo will be selected
 
-        `flavor_*`    -> with labels `flavor_blue` and `flavor_red` set, will select the flavors `red` and `blue`. If none are set, the step fails.
+        - `full,!demo|orange,blue,!teal`
+          - two dimensions. With a label set of "blue" and "orange" this will select the
+          flavor combinations `demoBlue` and `demoOrange`
+
+        - `flavor_*`
+          - with labels `flavor_blue` and `flavor_red` set, will select the flavors `red` and `blue`. If none are set,
+        the step fails.
+
+        - `flavor_*,!orange`
+          - with no labels matching `flavor_*` set, will select the flavor `orange`
 
         NB: although this is targeted for selecting flavors, it can just as well be applied to build types. Just make
-        sure to specify the build type as the last dimension.
+          sure to specify the build type as the last dimension.
 
       is_expand: true
       is_required: true

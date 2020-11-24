@@ -61,7 +61,7 @@ func (g GitlabProcessor) getConf() Conf {
 	return g.conf
 }
 
-func (g GitlabProcessor) processLabelsForPR(flavorDimensions map[int]FlavorDimension) map[string]bool {
+func (g GitlabProcessor) processLabelsForPR(flavorDimensions []FlavorDimension) map[string]bool {
 	mergeRequest := fetchMergeRequestForPRGitlab(g.conf)
 
 	if mergeRequest == nil {
@@ -74,7 +74,7 @@ func (g GitlabProcessor) processLabelsForPR(flavorDimensions map[int]FlavorDimen
 	return selectFlavorsForMergeRequestGitlab(mergeRequest, flavorDimensions)
 }
 
-func (g GitlabProcessor) processLabelsForCommit(flavorDimensions map[int]FlavorDimension) map[string]bool {
+func (g GitlabProcessor) processLabelsForCommit(flavorDimensions []FlavorDimension) map[string]bool {
 	mergeRequest := fetchMergeRequestForCommitGitlab(g.conf)
 
 	if mergeRequest == nil {
@@ -87,7 +87,7 @@ func (g GitlabProcessor) processLabelsForCommit(flavorDimensions map[int]FlavorD
 	return selectFlavorsForMergeRequestGitlab(mergeRequest, flavorDimensions)
 }
 
-func selectFlavorsForMergeRequestGitlab(mergeRequest *MergeRequestGitlab, flavorDimensions map[int]FlavorDimension) map[string]bool {
+func selectFlavorsForMergeRequestGitlab(mergeRequest *MergeRequestGitlab, flavorDimensions []FlavorDimension) map[string]bool {
 	mrLabels := mergeRequest.Labels.Edges
 	if len(mrLabels) == 0 {
 		log.Warnf("No labels found, applying defaults...")

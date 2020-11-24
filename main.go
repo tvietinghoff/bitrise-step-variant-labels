@@ -74,7 +74,7 @@ func main() {
 	os.Exit(0)
 }
 
-func generateEnvironmentVariable(key string, pattern string, flavorDimensions map[int]FlavorDimension) {
+func generateEnvironmentVariable(key string, pattern string, flavorDimensions []FlavorDimension) {
 	patterns := make(map[string]bool)
 	separator := " "
 	separatorPos := strings.Index(pattern, `;`)
@@ -90,12 +90,12 @@ func generateEnvironmentVariable(key string, pattern string, flavorDimensions ma
 	patterns[pattern] = true
 	for index, flavorDimension := range flavorDimensions {
 		outPatterns := make(map[string]bool)
-		placeholder := fmt.Sprintf("#%d", flavorDimension.Index)
+		placeholder := fmt.Sprintf("#%d", index+1)
 		selectedFlavors := flavorDimension.SelectedFlavors
 		if len(selectedFlavors) == 0 {
 			selectedFlavors = make(map[string]bool)
 			selectedFlavors[flavorDimension.DefaultFlavor] = true
-			fmt.Printf("No label for flavor dimension %d found, defaulting to %s\n", index, flavorDimension.DefaultFlavor)
+			fmt.Printf("No label for flavor dimension %d found, defaulting to %s\n", index+1, flavorDimension.DefaultFlavor)
 		}
 		for flavor := range selectedFlavors {
 			for pattern := range patterns {
@@ -169,7 +169,7 @@ func label2Env(conf Conf, labels map[string]bool) {
 			}
 		}
 
-		for label, _ := range labels {
+		for label := range labels {
 			matches := labelRegex.FindStringSubmatch(label)
 			if len(matches) == 0 {
 				continue

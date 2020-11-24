@@ -54,7 +54,7 @@ func (g GithubProcessor) getConf() Conf {
 	return g.conf
 }
 
-func (g GithubProcessor) processLabelsForPR(flavorDimensions map[int]FlavorDimension) map[string]bool {
+func (g GithubProcessor) processLabelsForPR(flavorDimensions []FlavorDimension) map[string]bool {
 	mergeRequest := fetchMergeRequestForPRGithub(g.conf)
 
 	if mergeRequest == nil {
@@ -67,7 +67,7 @@ func (g GithubProcessor) processLabelsForPR(flavorDimensions map[int]FlavorDimen
 	return selectFlavorsForMergeRequestGithub(mergeRequest, flavorDimensions)
 }
 
-func (g GithubProcessor) processLabelsForCommit(flavorDimensions map[int]FlavorDimension) map[string]bool {
+func (g GithubProcessor) processLabelsForCommit(flavorDimensions []FlavorDimension) map[string]bool {
 	mergeRequest := fetchMergeRequestForCommitGithub(g.conf)
 
 	if mergeRequest == nil {
@@ -112,7 +112,7 @@ func fetchMergeRequestForPRGithub(conf Conf) *MergeRequestGithub {
 	return &graphQLResponse.Data.Repository.PullRequest
 }
 
-func selectFlavorsForMergeRequestGithub(mergeRequest *MergeRequestGithub, flavorDimensions map[int]FlavorDimension) map[string]bool {
+func selectFlavorsForMergeRequestGithub(mergeRequest *MergeRequestGithub, flavorDimensions []FlavorDimension) map[string]bool {
 	mrLabels := mergeRequest.Labels.Edges
 	if len(mrLabels) == 0 {
 		log.Warnf("No labels found, applying defaults...")
