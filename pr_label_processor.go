@@ -1,21 +1,19 @@
-package pr_processors
+package main
 
 import (
-	"bitrise-step-variant-labels/internal/buildvariants"
-	"bitrise-step-variant-labels/internal/common"
 	"github.com/bitrise-io/go-utils/log"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
 )
 
-type PrLabelProcessor interface {
-	getConf() common.Conf
-	processLabelsForPR(dimensions []buildvariants.FlavorDimension) map[string]bool
-	processLabelsForCommit(dimensions []buildvariants.FlavorDimension) map[string]bool
+type prLabelProcessor interface {
+	getConf() conf
+	processLabelsForPR(dimensions []flavorDimension) map[string]bool
+	processLabelsForCommit(dimensions []flavorDimension) map[string]bool
 }
 
-func ProcessLabels(p PrLabelProcessor, flavorDimensions []buildvariants.FlavorDimension) map[string]bool {
+func processLabels(p prLabelProcessor, flavorDimensions []flavorDimension) map[string]bool {
 	var labels map[string]bool
 	conf := p.getConf()
 	if conf.PullRequest != 0 {
@@ -25,8 +23,8 @@ func ProcessLabels(p PrLabelProcessor, flavorDimensions []buildvariants.FlavorDi
 	} else {
 		log.Warnf("Neither commit_hash nor pull_request given. Building defaults only.")
 		for index, dimension := range flavorDimensions {
-			if dimension.DefaultFlavor == "" {
-				common.Fail("Missing default for flavor dimension %d, aborting...", index)
+			if dimension.defaultFlavor == "" {
+				fail("Missing default for flavor dimension %d, aborting...", index)
 			}
 		}
 		labels = nil
@@ -34,7 +32,7 @@ func ProcessLabels(p PrLabelProcessor, flavorDimensions []buildvariants.FlavorDi
 	return labels
 }
 
-func maybeExportDescription(conf common.Conf, mergeRequest MergeRequestGitlab) {
+func maybeExportDescription(conf conf, mergeRequest MergeRequestGitlab) {
 	if len(conf.ExportDescription) == 0 {
 		return
 	}

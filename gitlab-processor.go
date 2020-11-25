@@ -1,9 +1,6 @@
-package pr_processors
+package main
 
 import (
-	. "bitrise-step-variant-labels/internal/buildvariants"
-	. "bitrise-step-variant-labels/internal/common"
-	"bitrise-step-variant-labels/internal/graphql"
 	"encoding/json"
 	"fmt"
 	"github.com/bitrise-io/go-utils/log"
@@ -50,18 +47,18 @@ type MergeGraphQLResponseGitlab struct {
 }
 
 type GitlabProcessor struct {
-	conf Conf
+	conf conf
 }
 
-func NewGitlabProcessor(conf Conf) GitlabProcessor {
+func NewGitlabProcessor(conf conf) GitlabProcessor {
 	return GitlabProcessor{conf: conf}
 }
 
-func (g GitlabProcessor) getConf() Conf {
+func (g GitlabProcessor) getConf() conf {
 	return g.conf
 }
 
-func (g GitlabProcessor) processLabelsForPR(flavorDimensions []FlavorDimension) map[string]bool {
+func (g GitlabProcessor) processLabelsForPR(flavorDimensions []flavorDimension) map[string]bool {
 	mergeRequest := fetchMergeRequestForPRGitlab(g.conf)
 
 	if mergeRequest == nil {
@@ -74,7 +71,7 @@ func (g GitlabProcessor) processLabelsForPR(flavorDimensions []FlavorDimension) 
 	return selectFlavorsForMergeRequestGitlab(mergeRequest, flavorDimensions)
 }
 
-func (g GitlabProcessor) processLabelsForCommit(flavorDimensions []FlavorDimension) map[string]bool {
+func (g GitlabProcessor) processLabelsForCommit(flavorDimensions []flavorDimension) map[string]bool {
 	mergeRequest := fetchMergeRequestForCommitGitlab(g.conf)
 
 	if mergeRequest == nil {
@@ -87,7 +84,7 @@ func (g GitlabProcessor) processLabelsForCommit(flavorDimensions []FlavorDimensi
 	return selectFlavorsForMergeRequestGitlab(mergeRequest, flavorDimensions)
 }
 
-func selectFlavorsForMergeRequestGitlab(mergeRequest *MergeRequestGitlab, flavorDimensions []FlavorDimension) map[string]bool {
+func selectFlavorsForMergeRequestGitlab(mergeRequest *MergeRequestGitlab, flavorDimensions []flavorDimension) map[string]bool {
 	mrLabels := mergeRequest.Labels.Edges
 	if len(mrLabels) == 0 {
 		log.Warnf("No labels found, applying defaults...")
@@ -104,14 +101,14 @@ func selectFlavorsForMergeRequestGitlab(mergeRequest *MergeRequestGitlab, flavor
 		return nil
 	}
 
-	fmt.Printf("Found labels: %s\n", strings.Join(Keys(labels), ", "))
+	fmt.Printf("Found labels: %s\n", strings.Join(keys(labels), ", "))
 
-	SelectFlavorsFromLabels(labels, flavorDimensions)
+	selectFlavorsFromLabels(labels, flavorDimensions)
 
 	return labels
 }
 
-func fetchMergeRequestForCommitGitlab(conf Conf) *MergeRequestGitlab {
+func fetchMergeRequestForCommitGitlab(conf conf) *MergeRequestGitlab {
 	requestBody := `
 	{ "query":
 		"query {
@@ -141,11 +138,11 @@ func fetchMergeRequestForCommitGitlab(conf Conf) *MergeRequestGitlab {
 		"$ProjectPath", conf.ProjectPath,
 		"\n", " ",
 		"\t", ""}
-	err, jsonResponse := graphql.Request(requestBody, replacements, conf)
+	err, jsonResponse := GraphQlRequest(requestBody, replacements, conf)
 	var graphQLResponse MergeGraphQLResponseGitlab
 	err = json.NewDecoder(strings.NewReader(jsonResponse)).Decode(&graphQLResponse)
 	if err != nil {
-		Fail("failed to decode graphql response: %v\n", err)
+		fail("failed to decode graphql response: %v\n", err)
 	}
 	if len(graphQLResponse.Data.Project.MergeRequests.Edges) == 0 {
 		return nil
@@ -160,7 +157,7 @@ func fetchMergeRequestForCommitGitlab(conf Conf) *MergeRequestGitlab {
 	return nil
 }
 
-func fetchMergeRequestForPRGitlab(conf Conf) *MergeRequestGitlab {
+func fetchMergeRequestForPRGitlab(conf conf) *MergeRequestGitlab {
 	requestBody := `
 	{ "query":
 		"query {
@@ -187,11 +184,11 @@ func fetchMergeRequestForPRGitlab(conf Conf) *MergeRequestGitlab {
 		"$PullRequest", fmt.Sprintf("%d", conf.PullRequest),
 		"\n", " ",
 		"\t", ""}
-	err, jsonResponse := graphql.Request(requestBody, replacements, conf)
+	err, jsonResponse := GraphQlRequest(requestBody, replacements, conf)
 	var graphQLResponse PRGraphQLResponseGitlab
 	err = json.NewDecoder(strings.NewReader(jsonResponse)).Decode(&graphQLResponse)
 	if err != nil {
-		Fail("failed to decode graphql response: %v\n", err)
+		fail("failed to decode graphql response: %v\n", err)
 	}
 	return &graphQLResponse.Data.Project.MergeRequest
 }

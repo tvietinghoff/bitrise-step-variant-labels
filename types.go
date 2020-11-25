@@ -1,6 +1,6 @@
-package common
+package main
 
-type Conf struct {
+type conf struct {
 	Provider          string `env:"provider"`
 	ProjectPath       string `env:"project_path"`
 	RepoOwner         string `env:"repo_owner"`

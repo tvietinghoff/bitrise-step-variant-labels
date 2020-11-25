@@ -1,9 +1,6 @@
-package pr_processors
+package main
 
 import (
-	. "bitrise-step-variant-labels/internal/buildvariants"
-	. "bitrise-step-variant-labels/internal/common"
-	"bitrise-step-variant-labels/internal/graphql"
 	"encoding/json"
 	"fmt"
 	"github.com/bitrise-io/go-utils/log"
@@ -43,18 +40,18 @@ type MergeGraphQLResponseGithub struct {
 }
 
 type GithubProcessor struct {
-	conf Conf
+	conf conf
 }
 
-func NewGithubProcessor(conf Conf) GithubProcessor {
+func NewGithubProcessor(conf conf) GithubProcessor {
 	return GithubProcessor{conf: conf}
 }
 
-func (g GithubProcessor) getConf() Conf {
+func (g GithubProcessor) getConf() conf {
 	return g.conf
 }
 
-func (g GithubProcessor) processLabelsForPR(flavorDimensions []FlavorDimension) map[string]bool {
+func (g GithubProcessor) processLabelsForPR(flavorDimensions []flavorDimension) map[string]bool {
 	mergeRequest := fetchMergeRequestForPRGithub(g.conf)
 
 	if mergeRequest == nil {
@@ -67,7 +64,7 @@ func (g GithubProcessor) processLabelsForPR(flavorDimensions []FlavorDimension) 
 	return selectFlavorsForMergeRequestGithub(mergeRequest, flavorDimensions)
 }
 
-func (g GithubProcessor) processLabelsForCommit(flavorDimensions []FlavorDimension) map[string]bool {
+func (g GithubProcessor) processLabelsForCommit(flavorDimensions []flavorDimension) map[string]bool {
 	mergeRequest := fetchMergeRequestForCommitGithub(g.conf)
 
 	if mergeRequest == nil {
@@ -80,7 +77,7 @@ func (g GithubProcessor) processLabelsForCommit(flavorDimensions []FlavorDimensi
 	return selectFlavorsForMergeRequestGithub(mergeRequest, flavorDimensions)
 }
 
-func fetchMergeRequestForPRGithub(conf Conf) *MergeRequestGithub {
+func fetchMergeRequestForPRGithub(conf conf) *MergeRequestGithub {
 	requestBody := `
 	{ "query": 
 		"{
@@ -103,16 +100,16 @@ func fetchMergeRequestForPRGithub(conf Conf) *MergeRequestGithub {
 		"$PullRequest", fmt.Sprintf("%d", conf.PullRequest),
 		"\n", " ",
 		"\t", ""}
-	err, jsonResponse := graphql.Request(requestBody, replacements, conf)
+	err, jsonResponse := GraphQlRequest(requestBody, replacements, conf)
 	var graphQLResponse PRGraphQLResponseGithub
 	err = json.NewDecoder(strings.NewReader(jsonResponse)).Decode(&graphQLResponse)
 	if err != nil {
-		Fail("failed to decode graphql response: %v\n", err)
+		fail("failed to decode graphql response: %v\n", err)
 	}
 	return &graphQLResponse.Data.Repository.PullRequest
 }
 
-func selectFlavorsForMergeRequestGithub(mergeRequest *MergeRequestGithub, flavorDimensions []FlavorDimension) map[string]bool {
+func selectFlavorsForMergeRequestGithub(mergeRequest *MergeRequestGithub, flavorDimensions []flavorDimension) map[string]bool {
 	mrLabels := mergeRequest.Labels.Edges
 	if len(mrLabels) == 0 {
 		log.Warnf("No labels found, applying defaults...")
@@ -127,13 +124,13 @@ func selectFlavorsForMergeRequestGithub(mergeRequest *MergeRequestGithub, flavor
 		log.Warnf("No labels found, applying defaults...")
 		return nil
 	}
-	fmt.Printf("Found labels: %s\n", strings.Join(Keys(labels), ", "))
+	fmt.Printf("Found labels: %s\n", strings.Join(keys(labels), ", "))
 
-	SelectFlavorsFromLabels(labels, flavorDimensions)
+	selectFlavorsFromLabels(labels, flavorDimensions)
 
 	return labels
 }
-func fetchMergeRequestForCommitGithub(conf Conf) *MergeRequestGithub {
+func fetchMergeRequestForCommitGithub(conf conf) *MergeRequestGithub {
 	requestBody := `
 	{ "query": 
 		"{
@@ -164,11 +161,11 @@ func fetchMergeRequestForCommitGithub(conf Conf) *MergeRequestGithub {
 		"$Commit", conf.CommitHash,
 		"\n", " ",
 		"\t", ""}
-	err, jsonResponse := graphql.Request(requestBody, replacements, conf)
+	err, jsonResponse := GraphQlRequest(requestBody, replacements, conf)
 	var graphQLResponse MergeGraphQLResponseGithub
 	err = json.NewDecoder(strings.NewReader(jsonResponse)).Decode(&graphQLResponse)
 	if err != nil {
-		Fail("failed to decode graphql response: %v\n", err)
+		fail("failed to decode graphql response: %v\n", err)
 	}
 	if len(graphQLResponse.Data.Repository.Object.PullRequests.Edges) == 0 {
 		log.Warnf("No associated pull request found, applying defaults...", err)

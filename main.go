@@ -1,9 +1,6 @@
 package main
 
 import (
-	. "bitrise-step-variant-labels/internal/buildvariants"
-	. "bitrise-step-variant-labels/internal/common"
-	. "bitrise-step-variant-labels/internal/pr-processors"
 	"fmt"
 	"github.com/bitrise-io/go-steputils/tools"
 	"github.com/bitrise-tools/go-steputils/stepconf"
@@ -13,10 +10,10 @@ import (
 )
 
 func main() {
-	var conf Conf
+	var conf conf
 
 	if err := stepconf.Parse(&conf); err != nil {
-		Fail("step config failed: %v\n", err)
+		fail("step config failed: %v\n", err)
 	}
 	printconf := conf
 	printconf.AuthToken = "***"
@@ -27,9 +24,9 @@ func main() {
 		conf.Provider = "github"
 	}
 
-	flavorDimensions := GetFlavorDimensions(conf)
+	flavorDimensions := getFlavorDimensions(conf)
 	if len(flavorDimensions) == 0 {
-		Fail("failed to parse flavor labels, check input: %v", conf.VariantLabels)
+		fail("failed to parse flavor labels, check input: %v", conf.VariantLabels)
 	}
 
 	variantPatternRegex := regexp.MustCompile(`#\d`)
@@ -38,32 +35,32 @@ func main() {
 	for _, patternSpec := range strings.Split(conf.VariantPatterns, "|") {
 		parts := strings.Split(patternSpec, "=")
 		if len(parts) != 2 {
-			Fail("invalid variant pattern specification: %v\nExpected '{variable}={pattern}[;{separator}]", patternSpec)
+			fail("invalid variant pattern specification: %v\nExpected '{variable}={pattern}[;{separator}]", patternSpec)
 		}
 
 		key := strings.TrimSpace(parts[0])
 		if len(key) == 0 {
-			Fail("variant pattern specification does not include a key, check input: %v", patternSpec)
+			fail("variant pattern specification does not include a key, check input: %v", patternSpec)
 		}
 		pattern := strings.TrimSpace(parts[1])
 
 		if !variantPatternRegex.MatchString(pattern) {
-			Fail("variant pattern does not include a placeholder #<n>, check input: %v", patternSpec)
+			fail("variant pattern does not include a placeholder #<n>, check input: %v", patternSpec)
 		}
 
 		variantPatterns[key] = pattern
 	}
 
-	var processor PrLabelProcessor
+	var processor prLabelProcessor
 	if conf.Provider == "github" {
 		processor = NewGithubProcessor(conf)
 	} else if conf.Provider == "gitlab" {
 		processor = NewGitlabProcessor(conf)
 	} else {
-		Fail("Invalid provider: %v. Allowed are: github, gitlab", conf.Provider)
+		fail("Invalid provider: %v. Allowed are: github, gitlab", conf.Provider)
 	}
 
-	labels := ProcessLabels(processor, flavorDimensions)
+	labels := processLabels(processor, flavorDimensions)
 
 	label2Env(conf, labels)
 
@@ -74,7 +71,7 @@ func main() {
 	os.Exit(0)
 }
 
-func generateEnvironmentVariable(key string, pattern string, flavorDimensions []FlavorDimension) {
+func generateEnvironmentVariable(key string, pattern string, flavorDimensions []flavorDimension) {
 	patterns := make(map[string]bool)
 	separator := " "
 	separatorPos := strings.Index(pattern, `;`)
@@ -91,11 +88,11 @@ func generateEnvironmentVariable(key string, pattern string, flavorDimensions []
 	for index, flavorDimension := range flavorDimensions {
 		outPatterns := make(map[string]bool)
 		placeholder := fmt.Sprintf("#%d", index+1)
-		selectedFlavors := flavorDimension.SelectedFlavors
+		selectedFlavors := flavorDimension.selectedFlavors
 		if len(selectedFlavors) == 0 {
 			selectedFlavors = make(map[string]bool)
-			selectedFlavors[flavorDimension.DefaultFlavor] = true
-			fmt.Printf("No label for flavor dimension %d found, defaulting to %s\n", index+1, flavorDimension.DefaultFlavor)
+			selectedFlavors[flavorDimension.defaultFlavor] = true
+			fmt.Printf("No label for flavor dimension %d found, defaulting to %s\n", index+1, flavorDimension.defaultFlavor)
 		}
 		for flavor := range selectedFlavors {
 			for pattern := range patterns {
@@ -120,7 +117,7 @@ func generateEnvironmentVariable(key string, pattern string, flavorDimensions []
 	fmt.Printf("%s = %s\n", key, variantsString)
 	err := tools.ExportEnvironmentWithEnvman(key, variantsString)
 	if err != nil {
-		Fail("Failed to export environment variable: %v", err)
+		fail("Failed to export environment variable: %v", err)
 	}
 }
 
@@ -146,7 +143,7 @@ Label specification types:
 		distribute=internal,external
 
 */
-func label2Env(conf Conf, labels map[string]bool) {
+func label2Env(conf conf, labels map[string]bool) {
 	envvars := make(map[string]string)
 
 	for _, envspec := range strings.Split(conf.Labels2Env, ",") {
