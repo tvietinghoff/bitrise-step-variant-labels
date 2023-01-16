@@ -236,9 +236,16 @@ inputs:
 
         `prefix_*=key`: If any label matching `prefix_*` is found, sets the environment variable named `key` with the
         	content being a comma-separated list of all values that were found represented by the * placeholder.
+            
         	Example: `dist_*=distribute`
         		When labels `dist_internal` and `dist_external` are set at the PR, this will create the following variable:
         		`distribute=internal,external`
+            
+            This can as well be used to create an environment variable holding the comma-separated list of all set labels
+            like this:
+            
+            `*=pr_labels`
+                will set an environment variable `pr_labels` that contains all labels set in the PR.
 
 outputs:
   - VARIANTS:
