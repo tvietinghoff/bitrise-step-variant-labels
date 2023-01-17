@@ -12,4 +12,5 @@ type conf struct {
 	VariantPatterns   string `env:"variant_patterns,required"`
 	ExportDescription string `env:"export_description"`
 	Labels2Env        string `env:"labels2env"`
+	ProjectId         string `env:"project_id"`
 }

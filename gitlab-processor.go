@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/bitrise-io/go-utils/log"
+	"regexp"
 	"strings"
 )
 
@@ -13,6 +14,12 @@ type PRGraphQLResponseGitlab struct {
 			MergeRequest MergeRequestGitlab `json:"mergeRequest"`
 		} `json:"project"`
 	} `json:"data"`
+}
+
+type CommitDetails struct {
+	Id      string `json:"id"`
+	Title   string `json:"title"`
+	Message string `json:"message"`
 }
 
 type MergeRequestLabelGitlab struct {
@@ -68,33 +75,36 @@ func (g GitlabProcessor) processLabelsForPR(flavorDimensions []flavorDimension) 
 
 	maybeExportDescription(g.conf, *mergeRequest)
 
-	return selectFlavorsForMergeRequestGitlab(mergeRequest, flavorDimensions)
+	labels := extractLabels(mergeRequest)
+
+	return selectFlavorsForLabels(labels, flavorDimensions)
 }
 
 func (g GitlabProcessor) processLabelsForCommit(flavorDimensions []flavorDimension) map[string]bool {
 	mergeRequest := fetchMergeRequestForCommitGitlab(g.conf)
 
+	var labels map[string]bool
+
 	if mergeRequest == nil {
-		log.Warnf("No merge requests found for commit, applying defaults...")
-		return nil
+		if len(g.conf.ProjectId) == 0 {
+			log.Warnf("No merge requests found for commit. Please configure the project ID if you want to specify build labels in the commit message...")
+		} else {
+			log.Warnf("No merge requests found for commit, checking commit message...")
+			commitDetails := fetchCommitDetails(g.conf.CommitHash, g.conf)
+			labels = extractLabelsFromCommit(commitDetails)
+		}
+		if len(labels) == 0 {
+			log.Warnf("No labels found, applying defaults...")
+		}
+	} else {
+		labels = extractLabels(mergeRequest)
+		maybeExportDescription(g.conf, *mergeRequest)
 	}
 
-	maybeExportDescription(g.conf, *mergeRequest)
-
-	return selectFlavorsForMergeRequestGitlab(mergeRequest, flavorDimensions)
+	return selectFlavorsForLabels(labels, flavorDimensions)
 }
 
-func selectFlavorsForMergeRequestGitlab(mergeRequest *MergeRequestGitlab, flavorDimensions []flavorDimension) map[string]bool {
-	mrLabels := mergeRequest.Labels.Edges
-	if len(mrLabels) == 0 {
-		log.Warnf("No labels found, applying defaults...")
-		return nil
-	}
-	var labels = make(map[string]bool)
-	for _, label := range mrLabels {
-		labelName := label.Node.Title
-		labels[labelName] = true
-	}
+func selectFlavorsForLabels(labels map[string]bool, flavorDimensions []flavorDimension) map[string]bool {
 
 	if len(labels) == 0 {
 		log.Warnf("No labels found, applying defaults...")
@@ -105,6 +115,41 @@ func selectFlavorsForMergeRequestGitlab(mergeRequest *MergeRequestGitlab, flavor
 
 	selectFlavorsFromLabels(labels, flavorDimensions)
 
+	return labels
+}
+
+func extractLabels(mergeRequest *MergeRequestGitlab) map[string]bool {
+	mrLabels := mergeRequest.Labels.Edges
+	if len(mrLabels) == 0 {
+		log.Warnf("No labels found, applying defaults...")
+		return map[string]bool{}
+	}
+	var labels = make(map[string]bool)
+	for _, label := range mrLabels {
+		labelName := label.Node.Title
+		labels[labelName] = true
+	}
+	return labels
+}
+
+func extractLabelsFromCommit(commitDetails CommitDetails) map[string]bool {
+	var reLabels = regexp.MustCompile(`\[labels:([^\]]*)\]`)
+	var reSeparators = regexp.MustCompile(`[,\s]+`)
+
+	var labels = make(map[string]bool)
+	for _, submatch := range reLabels.FindAllStringSubmatch(commitDetails.Message, -1) {
+		labelList := submatch[1]
+		for _, label := range reSeparators.Split(labelList, -1) {
+			if len(label) > 0 {
+				labels[label] = true
+			}
+		}
+	}
+
+	if len(labels) == 0 {
+		log.Debugf("No labels found in commit message")
+		return map[string]bool{}
+	}
 	return labels
 }
 
@@ -191,4 +236,21 @@ func fetchMergeRequestForPRGitlab(conf conf) *MergeRequestGitlab {
 		fail("failed to decode graphql response: %v\n", err)
 	}
 	return &graphQLResponse.Data.Project.MergeRequest
+}
+
+func fetchCommitDetails(commitSha string, conf conf) CommitDetails {
+	err, jsonResponse := ApiRequest(
+		strings.NewReplacer(":sha", commitSha, ":projectId", conf.ProjectId).
+			Replace("https://gitlab.com/api/v4/projects/:projectId/repository/commits/:sha"),
+		conf, "GET", "")
+
+	if err != nil {
+		fail("Failed to get commit details: %v\n", err)
+	}
+	var commitApiResponse CommitDetails
+	err = json.NewDecoder(strings.NewReader(jsonResponse)).Decode(&commitApiResponse)
+	if err != nil {
+		fail("Failed to decode commit details: %v\n", err)
+	}
+	return commitApiResponse
 }

@@ -12,7 +12,17 @@ title: |-
 summary: |
   Extracts labels from PR and derives build variants to build from it
 description: |
-  When merging a PR, this step evaluates the labels on the github PR and generates a list of Android gradle build variants based on the labels set. Multiple flavor dimensions can be set. The labels to recognize are configured in the step.
+  When merging a PR, this step evaluates the labels on the github / gitlab PR and generates a list of Android gradle 
+  build variants based on the labels set. Multiple flavor dimensions can be set. The labels to recognize are configured in 
+  the step. 
+  
+  gitlab only (currently): If you configure the gitlab project ID, this step can also be used outside of a merge request
+  context. If there is no merge request applicable, the commit message will be parsed for sections like these:
+  
+  `[label: <comma-separated labels>]`
+  
+  E.g. `[label: build_release, flavor_green, flavor_red]`
+
 website: https://github.com/tvietinghoff/bitrise-step-variant-labels
 source_code_url: https://github.com/tvietinghoff/bitrise-step-variant-labels
 support_url: https://github.com/tvietinghoff/bitrise-step-variant-labels/issues
@@ -30,9 +40,9 @@ host_os_tags:
 # https://github.com/bitrise-io/bitrise/blob/master/_docs/step-development-guideline.md
 #
 project_type_tags:
-#   - ios
-#   - macos
-   - android
+  #   - ios
+  #   - macos
+  - android
 #   - xamarin
 #   - react-native
 #   - cordova
@@ -51,11 +61,11 @@ run_if: ""
 
 deps:
   brew:
-  - name: git
-  - name: wget
+    - name: git
+    - name: wget
   apt_get:
-  - name: git
-  - name: wget
+    - name: git
+    - name: wget
 
 
 toolkit:
@@ -236,16 +246,28 @@ inputs:
 
         `prefix_*=key`: If any label matching `prefix_*` is found, sets the environment variable named `key` with the
         	content being a comma-separated list of all values that were found represented by the * placeholder.
-            
+        
         	Example: `dist_*=distribute`
         		When labels `dist_internal` and `dist_external` are set at the PR, this will create the following variable:
         		`distribute=internal,external`
-            
+        
             This can as well be used to create an environment variable holding the comma-separated list of all set labels
             like this:
-            
+        
             `*=pr_labels`
                 will set an environment variable `pr_labels` that contains all labels set in the PR.
+  - project_id:
+    opts:
+      title: "(Gitlab) Project ID"
+      summary: The gitlab project ID.
+      description: |
+        This is needed for accessing gitlab via API, e.g. when build labels need to be configured via commit message
+        as opposed to merge request labels (Commit information is accessed with the REST API as opposed to the merge
+        request information which is obtained via GraphQL). 
+
+      is_expand: false
+      is_required: false
+
 
 outputs:
   - VARIANTS:
